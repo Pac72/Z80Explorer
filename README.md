@@ -1,7 +1,7 @@
 # Z80Explorer
-Visual Zilog Z-80 netlist-level simulator
+Visual Zilog Z80 netlist-level simulator
 
-Z80 Explorer is a Zilog Z80 netlist-level simulator capable of running Z80 machine code and also an educational tool with features that help reverse engineer and understand this chip better.
+Z80 Explorer is a Zilog Z80 netlist-level simulator capable of running Z80 machine code and an educational tool with features that help reverse engineer and understand this chip better.
 
 Application's User's Guide: https://baltazarstudios.com/uc/Z80ExplorerGuide
 <br>
@@ -30,8 +30,8 @@ https://github.com/gdevic/Z80Explorer/releases
 
 The application is built on the Qt framework.
 
-* On Windows, install MS Visual Studio 2015 (+latest Service Pack, Update3). On Linux, gcc will do.
-* Install Qt 5.15.0 framework (with support for x64 MS Visual Studio 2015 on Windows)
+* On Windows, install MS Visual Studio 2019. On Linux, gcc should do.
+* Install Qt 5.15.2 framework (with support for x64 MS Visual Studio 2019 on Windows)
 * Add the “Qt Script (deprecated)” component to the Qt installation
 * Compile with QtCreator selecting the “Release” build
 
