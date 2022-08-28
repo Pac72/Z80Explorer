@@ -9,6 +9,11 @@
 
 #define USE_MY_LISTS 1
 #define EARLY_LOOP_DETECTION 1
+#define USE_SET_WITH_RECALCLIST 1
+
+#ifdef USE_SET_WITH_RECALCLIST
+#include <QBitArray>
+#endif
 
 /*
  * ClassSimZ80 implements Z80 chip netlist simulator
@@ -71,6 +76,9 @@ private:
     int m_listIndex {0};
     net_t m_group[MAX_NETS];
     int m_groupIndex {0};
+#ifdef USE_SET_WITH_RECALCLIST
+    QBitArray recalcListSet;
+#endif
 #else
     QVector<net_t> allNets();
     void recalcNetlist(QVector<net_t> &list);

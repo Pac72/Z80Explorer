@@ -4,7 +4,11 @@
 #include <QStringBuilder>
 #include <QtConcurrent>
 
+#ifdef USE_SET_WITH_RECALCLIST
+ClassSimZ80::ClassSimZ80() : recalcListSet(MAX_NETS)
+#else
 ClassSimZ80::ClassSimZ80()
+#endif
 {
     connect(&m_timer, &QTimer::timeout, this, &ClassSimZ80::onTimeout);
 }
@@ -346,6 +350,9 @@ inline bool ClassSimZ80::getNetValue()
 inline void ClassSimZ80::recalcNetlist()
 {
     m_recalcListIndex = 0;
+#ifdef USE_SET_WITH_RECALCLIST
+    recalcListSet.fill(false);
+#endif
     int t01rep = 3;
     while(m_listIndex)
     {
@@ -355,6 +362,9 @@ inline void ClassSimZ80::recalcNetlist()
         memcpy(m_list, m_recalcList, m_recalcListIndex * sizeof (net_t));
         m_listIndex = m_recalcListIndex;
         m_recalcListIndex = 0;
+#ifdef USE_SET_WITH_RECALCLIST
+        recalcListSet.fill(false);
+#endif
         // Optimization: if no transistors changed state, or if the *same group* of transistors toggled on and off,
         // which happens when there is a feedback loop, exit.
         // This is not necessarily 100% reliable since different trans id's may still add up to the same value,
@@ -509,9 +519,16 @@ inline void ClassSimZ80::setTransOff(struct Trans *t)
 inline void ClassSimZ80::addRecalcNet(net_t n)
 {
     if (Q_UNLIKELY((n==ngnd) || (n==npwr))) return;
+#ifdef USE_SET_WITH_RECALCLIST
+    if (recalcListSet[n]) {
+        return;
+    }
+    recalcListSet[n] = true;
+#else
     for (net_t *p = m_recalcList; p < (m_recalcList + m_recalcListIndex); p++)
         if (*p == n)
             return;
+#endif
     m_recalcList[m_recalcListIndex++] = n;
 }
 #else
