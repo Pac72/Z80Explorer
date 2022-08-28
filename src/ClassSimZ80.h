@@ -1,15 +1,12 @@
 #ifndef CLASSSIMZ80_H
 #define CLASSSIMZ80_H
 
+#include "AppTypes.h"
 #include "ClassNetlist.h"
 #include "z80state.h"
 #include <QAtomicInteger>
 #include <QElapsedTimer>
 #include <QTimer>
-
-#define USE_MY_LISTS 1
-#define EARLY_LOOP_DETECTION 1
-#define USE_SET_WITH_RECALCLIST 1
 
 #ifdef USE_SET_WITH_RECALCLIST
 #include <QBitArray>
