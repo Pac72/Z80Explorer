@@ -566,8 +566,14 @@ inline void ClassSimZ80::addNetToGroup(net_t n)
     {
         if (!t->on) continue;
         net_t other = 0;
-        if (t->c1 == n) other = t->c2;
-        if (t->c2 == n) other = t->c1;
+
+        if (t->c2 == n) {
+            other = t->c1;
+        } else if (t->c1 == n) {
+            other = t->c2;
+        }
+
+
         if (other)
             addNetToGroup(other);
     }
