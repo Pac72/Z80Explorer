@@ -304,7 +304,11 @@ inline bool ClassSimZ80::getNetValue()
     for (net_t *p = m_group; p < (m_group + m_groupIndex); p++)
     {
         Net &net = m_netlist[*p];
+#if USE_MY_LISTS_FOR_NET
+        auto conn = net.gatesCount + net.c1c2sCount;
+#else
         auto conn = net.gates.count() + net.c1c2s.count();
+#endif
         if (conn > max_conn)
         {
             max_conn = conn;
@@ -438,7 +442,11 @@ inline void ClassSimZ80::recalcNet(net_t n)
         Net &net = m_netlist[*p];
         if (net.state == newState) continue;
         net.state = newState;
+#if USE_MY_LISTS_FOR_NET
+        for (int i=0; i<net.gatesCount; i++)
+#else
         for (int i=0; i<net.gates.count(); i++)
+#endif
         {
             if (net.state)
                 setTransOn(net.gates[i]);
@@ -475,8 +483,13 @@ void ClassSimZ80::allNets()
     m_listIndex = 0;
     for (net_t n=0; n < m_netlist.count(); n++)
     {
+#if USE_MY_LISTS_FOR_NET
+        if ((n==ngnd) || (n==npwr) || (m_netlist[n].gatesCount == 0 && m_netlist[n].c1c2sCount == 0))
+            continue;
+#else
         if ((n==ngnd) || (n==npwr) || (m_netlist[n].gates.count()==0 && m_netlist[n].c1c2s.count()==0))
             continue;
+#endif
         m_list[m_listIndex++] = n;
     }
 }
@@ -565,8 +578,30 @@ inline void ClassSimZ80::addNetToGroup(net_t n)
     }
     m_group[m_groupIndex++] = n;
     if (Q_UNLIKELY((n==ngnd) || (n==npwr))) return;
+#if USE_MY_LISTS_FOR_NET
+    const Net &net = m_netlist[n];
+    if(net.c1c2s == NULL) {
+        return;
+    }
+    Trans **tend = net.c1c2s + net.c1c2sCount;
+    for (Trans **pt = net.c1c2s; pt < tend; pt++)
+    {
+        Trans *t = *pt;
+#else
+    /*
+     * The following cycle accounts for a lot of CPU time
+     * After reading
+     *   https://www.dvratil.cz/2015/06/qt-containers-and-c11-range-based-loops/
+     * I tried:
+     * #1 - slower than the original
+     *    const QVector<Trans *> transVect = m_netlist[n].c1c2s;
+     *    for (auto &t : transVect)
+     * #2 - also slower than the original
+     *    Q_FOREACH(const Trans *t, m_netlist[n].c1c2s)
+     */
     for (auto &t : m_netlist[n].c1c2s)
     {
+#endif
         if (!t->on) continue;
         net_t other = 0;
 

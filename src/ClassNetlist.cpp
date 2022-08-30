@@ -189,6 +189,14 @@ bool ClassNetlist::loadNetNames(const QString fileName, bool loadCustom)
     return false;
 }
 
+static Trans ** appendTrans(Trans **transList, uint16_t &transCount, Trans *elem)
+{
+    transCount++;
+    transList = (Trans **)realloc(transList, sizeof(Trans *) * transCount);
+    transList[transCount - 1] = elem;
+    return transList;
+}
+
 /*
  * Loads transdefs.js
  * Creates m_transdefs with transistor connections
@@ -236,9 +244,15 @@ bool ClassNetlist::loadTransdefs(const QString dir)
                     max = std::max(max, std::max(p->c1, p->c2)); // Find the max net number
 
                     // ----- Add the transistor to the netlist -----
+#if USE_MY_LISTS_FOR_NET
+                    m_netlist[p->gate].gates = appendTrans(m_netlist[p->gate].gates, m_netlist[p->gate].gatesCount, p);
+                    m_netlist[p->c1].c1c2s = appendTrans(m_netlist[p->c1].c1c2s, m_netlist[p->c1].c1c2sCount, p);
+                    m_netlist[p->c2].c1c2s = appendTrans(m_netlist[p->c2].c1c2s, m_netlist[p->c2].c1c2sCount, p);
+#else
                     m_netlist[p->gate].gates.append(p);
                     m_netlist[p->c1].c1c2s.append(p);
                     m_netlist[p->c2].c1c2s.append(p);
+#endif
                     count++;
                 }
                 else
@@ -249,8 +263,13 @@ bool ClassNetlist::loadTransdefs(const QString dir)
         }
         qInfo() << "Loaded" << count << "transistor definitions";
         qInfo() << "Max net index" << max;
+#if USE_MY_LISTS_FOR_NET
+        count = std::count_if(m_netlist.begin(), m_netlist.end(), [](Net &net)
+            { return !!(net.gatesCount || net.c1c2sCount); });
+#else
         count = std::count_if(m_netlist.begin(), m_netlist.end(), [](Net &net)
             { return !!(net.gates.count() || net.c1c2s.count()); });
+#endif
         qInfo() << "Number of nets" << count;
         count = std::count_if(m_transdefs.begin(), m_transdefs.end(), [](Trans &t) { return t.id; });
         qInfo() << "Number of transistors" << count;
@@ -371,6 +390,19 @@ const QStringList ClassNetlist::get(const QVector<net_t> &nets)
 const QVector<net_t> ClassNetlist::netsDriving(net_t n)
 {
     QVector<net_t> nets;
+#if USE_MY_LISTS_FOR_NET
+    const Net &net = m_netlist[n];
+    Trans **ptstart = net.gates;
+    Trans **ptend = ptstart != NULL ? ptstart + net.gatesCount : NULL;
+    for (Trans **pt = ptstart; pt != NULL && pt < ptend; pt++)
+    {
+        Trans *t = *pt;
+        if ((t->c1 > 2) && !nets.contains(t->c1)) // c1 is the source
+            nets.append(t->c1);
+        if ((t->c2 > 2) && !nets.contains(t->c2)) // c2 is the drain
+            nets.append(t->c2);
+    }
+#else
     const QVector<Trans *> &gates = m_netlist[n].gates;
 
     for (const auto t : gates)
@@ -380,6 +412,7 @@ const QVector<net_t> ClassNetlist::netsDriving(net_t n)
         if ((t->c2 > 2) && !nets.contains(t->c2)) // c2 is the drain
             nets.append(t->c2);
     }
+#endif
     std::sort(nets.begin(), nets.end()); // Sorting numbers only
     return nets;
 }
@@ -390,9 +423,23 @@ const QVector<net_t> ClassNetlist::netsDriving(net_t n)
 const QVector<net_t> ClassNetlist::netsDriven(net_t n)
 {
     QVector<net_t> nets;
-    for (auto &t : m_netlist[n].c1c2s)
+#if USE_MY_LISTS_FOR_NET
+    const Net &net = m_netlist[n];
+    Trans **ptstart = net.c1c2s;
+    Trans **ptend = ptstart != NULL ? ptstart + net.c1c2sCount : NULL;
+    for (Trans **pt = ptstart; pt != NULL && pt < ptend; pt++)
+    {
+        Trans *t = *pt;
         if (!nets.contains(t->gate))
             nets.append(t->gate);
+    }
+#else
+    for (auto &t : m_netlist[n].c1c2s)
+    {
+        if (!nets.contains(t->gate))
+            nets.append(t->gate);
+    }
+#endif
     std::sort(nets.begin(), nets.end()); // Sorting numbers only
     return nets;
 }
@@ -403,8 +450,20 @@ const QVector<net_t> ClassNetlist::netsDriven(net_t n)
 inline pin_t ClassNetlist::getNetStateEx(net_t n)
 {
     // Every transistor in the contributing nets needs to be off for this net to be hi-Z
+#if USE_MY_LISTS_FOR_NET
+    const Net &net = m_netlist[n];
+    Trans **ptstart = net.c1c2s;
+    Trans **ptend = ptstart != NULL ? ptstart + net.c1c2sCount : NULL;
+    for (Trans **pt = ptstart; pt != NULL && pt < ptend; pt++)
+    {
+        if ((*pt)->on) return !!m_netlist[n].state;
+    }
+#else
     for (auto &tran : m_netlist[n].c1c2s)
+    {
         if (tran->on) return !!m_netlist[n].state;
+    }
+#endif
     return 2;
 }
 
@@ -481,12 +540,36 @@ const QString ClassNetlist::netInfo(net_t net)
     {
         // Transistor numbers for which this net is either a source or a drain
         QStringList c1c2s;
+#if USE_MY_LISTS_FOR_NET
+        const Net &aNet = m_netlist[net];
+        Trans **ptstart = aNet.c1c2s;
+        Trans **ptend = ptstart != NULL ? ptstart + aNet.c1c2sCount : NULL;
+        for (Trans **pt = ptstart; pt != NULL && pt < ptend; pt++)
+        {
+            c1c2s.append( QString::number(*pt - &m_transdefs[0]) );
+        }
+#else
         for (auto &t : m_netlist[net].c1c2s)
+        {
             c1c2s.append( QString::number(t - &m_transdefs[0]) );
+        }
+#endif
         // Transistor numbers for which this net is a gate
         QStringList gates;
+#if USE_MY_LISTS_FOR_NET
+        const Net &aNet2 = m_netlist[net];
+        Trans **ptstart2 = aNet2.gates;
+        Trans **ptend2 = ptstart != NULL ? ptstart2 + aNet2.gatesCount : NULL;
+        for (Trans **pt = ptstart2; pt != NULL && pt < ptend2; pt++)
+        {
+            gates.append( QString::number(*pt - &m_transdefs[0]) );
+        }
+#else
         for (auto &t : m_netlist[net].gates)
+        {
             gates.append( QString::number(t - &m_transdefs[0]) );
+        }
+#endif
         // Limit printing up to 20 gate nets which is more than a practical limit.
         // This prevents large nets like clk to take over the log window
         if (gates.count() > 20)

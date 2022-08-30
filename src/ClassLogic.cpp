@@ -107,10 +107,17 @@ void ClassNetlist::parse(Logic *root)
         return;
     }
 
+    const int net0c1c2sCount =
+#if USE_MY_LISTS_FOR_NET
+        net0.c1c2sCount;
+#else
+        net0.c1c2s.count();
+#endif
+
     //-------------------------------------------------------------------------------
     // Detect clock gating
     //-------------------------------------------------------------------------------
-    if ((net0.c1c2s.count() == 1) && (net0.c1c2s[0]->gate == nclk))
+    if ((net0c1c2sCount == 1) && (net0.c1c2s[0]->gate == nclk))
     {
         visitedTran.append(net0.c1c2s[0]->id);
         net_t netid = (net0.c1c2s[0]->c1 == net0id) ? net0.c1c2s[0]->c2 : net0.c1c2s[0]->c1; // Pick the "other" net
@@ -126,7 +133,7 @@ void ClassNetlist::parse(Logic *root)
     //-------------------------------------------------------------------------------
     // Detect a lone Inverter driver
     //-------------------------------------------------------------------------------
-    if ((net0.c1c2s.count() == 1) && (net0.c1c2s[0]->c2 == ngnd))
+    if ((net0c1c2sCount == 1) && (net0.c1c2s[0]->c2 == ngnd))
     {
         net_t netgt = net0.c1c2s[0]->gate;
         qDebug() << net0id << "Inverter to" << netgt;
@@ -140,7 +147,11 @@ void ClassNetlist::parse(Logic *root)
     //-------------------------------------------------------------------------------
     // Detect Pulled-up Inverter driver (ex. 1304)
     //-------------------------------------------------------------------------------
-    if ((net0.gates.count() == 0) && (net0.c1c2s.count() == 2) && net0.hasPullup)
+#if USE_MY_LISTS_FOR_NET
+    if ((net0.gatesCount == 0) && (net0c1c2sCount == 2) && net0.hasPullup)
+#else
+    if ((net0.gates.count() == 0) && (net0c1c2sCount == 2) && net0.hasPullup)
+#endif
     {
         // No gates but two source/drain connections: we need to find out which transistor we need to follow
         net_t netid = 0;
@@ -169,7 +180,7 @@ void ClassNetlist::parse(Logic *root)
     //-------------------------------------------------------------------------------
     // Detect Push-Pull driver
     //-------------------------------------------------------------------------------
-    if (net0.c1c2s.count() == 2)
+    if (net0c1c2sCount == 2)
     {
         if ((net0.c1c2s[0]->c2 <= npwr) && (net0.c1c2s[1]->c2 <= npwr))
         {
@@ -179,10 +190,17 @@ void ClassNetlist::parse(Logic *root)
             Net &net01 = m_netlist[net01id];
             Net &net02 = m_netlist[net02id];
             // Identify the "short" path
+#if USE_MY_LISTS_FOR_NET
+            if ((net01.gatesCount == 1) && (net01.c1c2sCount == 1) && (net01.c1c2s[0]->c2 == ngnd) && (net01.c1c2s[0]->gate == net02id))
+                netid = net02id;
+            if ((net02.gatesCount == 1) && (net02.c1c2sCount == 1) && (net02.c1c2s[0]->c2 == ngnd) && (net02.c1c2s[0]->gate == net01id))
+                netid = net01id;
+#else
             if ((net01.gates.count() == 1) && (net01.c1c2s.count() == 1) && (net01.c1c2s[0]->c2 == ngnd) && (net01.c1c2s[0]->gate == net02id))
                 netid = net02id;
             if ((net02.gates.count() == 1) && (net02.c1c2s.count() == 1) && (net02.c1c2s[0]->c2 == ngnd) && (net02.c1c2s[0]->gate == net01id))
                 netid = net01id;
+#endif
             if (netid)
             {
                 qDebug() << "Push-Pull driver" << net01id << net02id << "source net" << netid;
@@ -199,22 +217,54 @@ void ClassNetlist::parse(Logic *root)
     // *All* source/drain connections could simply form a NOR gate with 2 or more inputs
     // This is a shortcut to a more generic case handled below (with mixed NOR/NAND/AND gates)
     //-------------------------------------------------------------------------------
+#if USE_MY_LISTS_FOR_NET
+    int i = 0;
+    if (net0.c1c2s != NULL) {
+        Trans** ptend = net0.c1c2s + net0.c1c2sCount;
+        for (Trans **ptt = net0.c1c2s; ptt < ptend; ptt++) {
+            if((*ptt)->c2 == ngnd) {
+                i++;
+            }
+        }
+    }
+#else
     auto i = std::count_if(net0.c1c2s.begin(), net0.c1c2s.end(), [=](Trans *t) { return t->c2 == ngnd; } );
-    if (i == net0.c1c2s.count())
+#endif
+    if (i == net0c1c2sCount)
     {
         qDebug() << "NOR gate" << net0id << "with fan-in of" << i;
+        root->op = LogicOp::Nor;
+#if USE_MY_LISTS_FOR_NET
+        if (net0.c1c2s == NULL) {
+            return;
+        }
+        Trans **pend = net0.c1c2s + net0.c1c2sCount;
+        for (Trans **pk = net0.c1c2s; pk < pend; pk++)
+        {
+            Logic *node = new Logic((*pk)->gate);
+            root->children.append(node);
+        }
+#else
         for (auto k : net0.c1c2s)
         {
             Logic *node = new Logic(k->gate);
             root->children.append(node);
         }
-        root->op = LogicOp::Nor;
+#endif
         return;
     }
 
     // Loop over all remaining transistors for which the current net is the source/drain
+#if USE_MY_LISTS_FOR_NET
+    Trans **pt1start = net0.c1c2s;
+    Trans **pt1end = pt1start != NULL ? pt1start + net0.c1c2sCount : NULL;
+    for (Trans **pt1 = pt1start; pt1 != NULL && pt1 < pt1end; pt1++)
+    {
+        Trans *t1 = *pt1;
+#else
     for (auto t1 : net0.c1c2s)
     {
+#endif
         net_t net1gt = t1->gate;
         net_t net1id = (t1->c1 == net0id) ? t1->c2 : t1->c1; // Pick the "other" net
         Net &net1 = m_netlist[net1id];
@@ -269,7 +319,11 @@ void ClassNetlist::parse(Logic *root)
         //-------------------------------------------------------------------------------
         // Complex NAND gate extends for 2 pass-transistor nets (ex. net 215)
         //-------------------------------------------------------------------------------
+#if USE_MY_LISTS_FOR_NET
+        if ((net1.gatesCount == 0) && (net1.c1c2sCount == 2) && (net1.hasPullup == false))
+#else
         if ((net1.gates.count() == 0) && (net1.c1c2s.count() == 2) && (net1.hasPullup == false))
+#endif
         {
             Trans *t2 = (net1.c1c2s[0]->id == t1->id) ? net1.c1c2s[1] : net1.c1c2s[0];
             net_t net2gt = t2->gate;
@@ -294,7 +348,11 @@ void ClassNetlist::parse(Logic *root)
             //-------------------------------------------------------------------------------
             // Complex NAND gate extends for 3 pass-transistor nets (ex. net 235)
             //-------------------------------------------------------------------------------
+#if USE_MY_LISTS_FOR_NET
+            if ((net2.gatesCount == 0) && (net2.c1c2sCount == 2) && (net2.hasPullup == false))
+#else
             if ((net2.gates.count() == 0) && (net2.c1c2s.count() == 2) && (net2.hasPullup == false))
+#endif
             {
                 Trans *t3 = (net2.c1c2s[0]->id == t2->id) ? net2.c1c2s[1] : net2.c1c2s[0];
                 net_t net3gt = t3->gate;

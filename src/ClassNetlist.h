@@ -18,8 +18,16 @@ struct Trans
 // Contains netlist net definition: net is a trace with equal potential and it connects a number of transistors
 struct Net
 {
+public:
+#if USE_MY_LISTS_FOR_NET
+    Trans **gates {};
+    uint16_t gatesCount {0};
+    Trans **c1c2s {};
+    uint16_t c1c2sCount {0};
+#else
     QVector<Trans *> gates;             // The list of transistors for which this net is a gate
     QVector<Trans *> c1c2s;             // The list of transistors for which this net is either a source or a drain
+#endif
     bool state {false};                 // The voltage on the net is high (if not floating)
     bool floats {false};                // Net can float (used with ab, db, mreq, iorq, rd, wr to read hi-Z state)
     bool isHigh {false};                // Net is being pulled high

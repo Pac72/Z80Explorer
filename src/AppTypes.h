@@ -22,6 +22,7 @@ enum class Netop : unsigned char { SetName, Rename, DeleteName, Changed };
 #endif
 
 #define USE_MY_LISTS 1
+#define USE_MY_LISTS_FOR_NET 1
 #define EARLY_LOOP_DETECTION 1
 #define USE_SET_WITH_RECALCLIST 1
 
