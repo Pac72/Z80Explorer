@@ -557,9 +557,12 @@ inline void ClassSimZ80::getNetGroup(net_t n)
 #if USE_MY_LISTS
 inline void ClassSimZ80::addNetToGroup(net_t n)
 {
-    for (net_t *p = m_group; p < (m_group + m_groupIndex); p++)
-        if (*p == n)
+    const net_t *pend = m_group + m_groupIndex;
+    for (net_t *p = m_group; p < pend; p++) {
+        if (*p == n) {
             return;
+        }
+    }
     m_group[m_groupIndex++] = n;
     if (Q_UNLIKELY((n==ngnd) || (n==npwr))) return;
     for (auto &t : m_netlist[n].c1c2s)
